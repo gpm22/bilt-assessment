@@ -38,11 +38,7 @@ public class RewardsEngine {
                 basePoints, member.getCurrentStreakMonths());
 
         YearMonth month = YearMonth.from(event.getPaymentDate());
-        long alreadyEarnedThisMonth = member.getPointsForMonth(month);
-        long remainingCap = Math.max(0, MONTHLY_POINTS_CAP - alreadyEarnedThisMonth);
-        long pointsToAward = Math.min(pointsWithBonus, remainingCap);
-
-        member.addPointsForMonth(month, pointsToAward);
+        long pointsToAward = member.addPointsUpToCap(month, pointsWithBonus, MONTHLY_POINTS_CAP);
 
         ProcessingOutcome outcome = pointsToAward == 0
                 ? ProcessingOutcome.CAPPED
