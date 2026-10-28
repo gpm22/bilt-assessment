@@ -11,10 +11,11 @@ import java.time.YearMonth;
  * Orchestrates the processing of an incoming payment webhook event:
  *
  *  1. Ignore the event if it is a duplicate delivery.
+ *     First delivery is recorded during this check.
  *  2. Calculate base points (with linked-account multiplier).
  *  3. Apply streak bonus if the member is eligible.
  *  4. Enforce the monthly points cap per member.
- *  5. Record the points and mark the event as processed.
+ *  5. Return the outcome and awarded points.
  */
 public class RewardsEngine {
 
