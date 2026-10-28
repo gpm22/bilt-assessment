@@ -229,4 +229,97 @@ class RewardsEngineTest {
             executor.shutdownNow();
         }
     }
+
+        @Test
+        void appliesNoStreakBonusBelowThresholdAndAppliesItAtThreshold() {
+        PaymentEvent event = new PaymentEvent(
+            "evt-threshold",
+            "member-1",
+            new BigDecimal("1000"),
+            false,
+            LocalDate.of(2026, 3, 1));
+
+        MemberAccount belowThreshold = new MemberAccount("member-1", 5);
+        MemberAccount atThreshold = new MemberAccount("member-2", 6);
+
+        PointsResult belowResult = engine.processPayment(event, belowThreshold);
+        PointsResult atResult = engine.processPayment(
+            new PaymentEvent("evt-threshold-2", "member-2", new BigDecimal("1000"), false, LocalDate.of(2026, 3, 1)),
+            atThreshold);
+
+        assertEquals(1000, belowResult.getPointsAwarded());
+        assertEquals(1100, atResult.getPointsAwarded());
+        }
+
+        @Test
+        void enforcesCapPerMonthWithoutBlockingNextMonthAwards() {
+        MemberAccount member = new MemberAccount("member-1", 0);
+        PaymentEvent march = new PaymentEvent(
+            "evt-march",
+            "member-1",
+            new BigDecimal("150000"),
+            false,
+            LocalDate.of(2026, 3, 10));
+        PaymentEvent april = new PaymentEvent(
+            "evt-april",
+            "member-1",
+            new BigDecimal("5000"),
+            false,
+            LocalDate.of(2026, 4, 1));
+
+        engine.processPayment(march, member);
+        PointsResult aprilResult = engine.processPayment(april, member);
+
+        assertEquals(100_000, member.getPointsForMonth(YearMonth.of(2026, 3)));
+        assertEquals(5_000, member.getPointsForMonth(YearMonth.of(2026, 4)));
+        assertEquals(ProcessingOutcome.AWARDED, aprilResult.getOutcome());
+        }
+
+        @Test
+        void reportsDuplicateBeforeCapWhenSameEventIsRetriedAfterCapReached() {
+        MemberAccount member = new MemberAccount("member-1", 0);
+        PaymentEvent cappedEvent = new PaymentEvent(
+            "evt-dup-cap",
+            "member-1",
+            new BigDecimal("150000"),
+            false,
+            LocalDate.of(2026, 3, 1));
+        PaymentEvent differentEvent = new PaymentEvent(
+            "evt-other",
+            "member-1",
+            new BigDecimal("100"),
+            false,
+            LocalDate.of(2026, 3, 2));
+
+        engine.processPayment(cappedEvent, member);
+        engine.processPayment(differentEvent, member);
+        PointsResult retry = engine.processPayment(cappedEvent, member);
+
+        assertEquals(ProcessingOutcome.DUPLICATE, retry.getOutcome());
+        assertTrue(retry.isSkippedAsDuplicate());
+        }
+
+        @Test
+        void roundsDownFractionalAmountsBeforeApplyingOutcome() {
+        MemberAccount member = new MemberAccount("member-1", 0);
+        PaymentEvent unlinked = new PaymentEvent(
+            "evt-fraction-a",
+            "member-1",
+            new BigDecimal("1234.99"),
+            false,
+            LocalDate.of(2026, 3, 1));
+        PaymentEvent linked = new PaymentEvent(
+            "evt-fraction-b",
+            "member-1",
+            new BigDecimal("1234.99"),
+            true,
+            LocalDate.of(2026, 3, 2));
+
+        PointsResult unlinkedResult = engine.processPayment(unlinked, member);
+        PointsResult linkedResult = engine.processPayment(linked, member);
+
+        assertEquals(1234, unlinkedResult.getPointsAwarded());
+        assertEquals(2469, linkedResult.getPointsAwarded());
+        assertEquals(ProcessingOutcome.AWARDED, linkedResult.getOutcome());
+        }
 }

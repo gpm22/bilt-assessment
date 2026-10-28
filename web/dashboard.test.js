@@ -60,3 +60,12 @@ test("falls back to a neutral status for unknown outcomes", () => {
   assert.equal(view.description, "We could not determine this payment outcome.");
   assert.equal(view.tone, "neutral");
 });
+
+test("clamps progress to 100 when points exceed monthly cap", () => {
+  const view = buildViewModel(
+    { pointsAwarded: 500, outcome: "AWARDED" },
+    { ...member, pointsThisMonth: 120_000 },
+  );
+
+  assert.equal(view.progressPercent, 100);
+});
