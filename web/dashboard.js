@@ -12,10 +12,34 @@ export function buildViewModel(result, member) {
     (member.pointsThisMonth / member.monthlyCap) * 100,
   );
 
+  const byOutcome = {
+    AWARDED: {
+      title: `${numberFormatter.format(result.pointsAwarded)} points credited`,
+      description: "Your rent payment was processed successfully.",
+      tone: "success",
+    },
+    DUPLICATE: {
+      title: "Duplicate event skipped",
+      description:
+        "This payment was already processed. No additional points were awarded.",
+      tone: "neutral",
+    },
+    CAPPED: {
+      title: "Monthly cap reached",
+      description:
+        "You have reached your monthly points cap. No more points can be awarded this month.",
+      tone: "warning",
+    },
+  };
+
+  const outcomeView = byOutcome[result.outcome] ?? {
+    title: "Status unavailable",
+    description: "We could not determine this payment outcome.",
+    tone: "neutral",
+  };
+
   return {
-    title: `${numberFormatter.format(result.pointsAwarded)} points credited`,
-    description: "Your rent payment was processed successfully.",
-    tone: "success",
+    ...outcomeView,
     progressPercent,
   };
 }
