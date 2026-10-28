@@ -178,4 +178,55 @@ class RewardsEngineTest {
             executor.shutdownNow();
         }
     }
+
+    @RepeatedTest(8)
+    void neverExceedsMonthlyCapWhenDifferentEventsArriveConcurrently() throws Exception {
+        int workerCount = 16;
+        RewardsEngine concurrentEngine = new RewardsEngine(
+                new PointsCalculator(), new ProcessedEventStore());
+        MemberAccount member = new MemberAccount("member-1", 0);
+        ExecutorService executor = Executors.newFixedThreadPool(workerCount);
+        CountDownLatch ready = new CountDownLatch(workerCount);
+        CountDownLatch start = new CountDownLatch(1);
+
+        try {
+            List<Future<PointsResult>> futures = new ArrayList<>();
+            for (int worker = 0; worker < workerCount; worker++) {
+                PaymentEvent event = new PaymentEvent(
+                        "evt-" + worker,
+                        "member-1",
+                        new BigDecimal("10000"),
+                        false,
+                        LocalDate.of(2026, 3, 1));
+                futures.add(executor.submit(() -> {
+                    ready.countDown();
+                    start.await();
+                    return concurrentEngine.processPayment(event, member);
+                }));
+            }
+
+            assertTrue(ready.await(2, TimeUnit.SECONDS));
+            start.countDown();
+
+            long totalAwarded = 0;
+            long awardedResults = 0;
+            long cappedResults = 0;
+            for (Future<PointsResult> future : futures) {
+                PointsResult result = future.get(2, TimeUnit.SECONDS);
+                totalAwarded += result.getPointsAwarded();
+                if (result.getOutcome() == ProcessingOutcome.AWARDED) {
+                    awardedResults++;
+                } else if (result.getOutcome() == ProcessingOutcome.CAPPED) {
+                    cappedResults++;
+                }
+            }
+
+            assertEquals(100_000, member.getPointsForMonth(YearMonth.of(2026, 3)));
+            assertEquals(100_000, totalAwarded);
+            assertEquals(10, awardedResults);
+            assertEquals(6, cappedResults);
+        } finally {
+            executor.shutdownNow();
+        }
+    }
 }
